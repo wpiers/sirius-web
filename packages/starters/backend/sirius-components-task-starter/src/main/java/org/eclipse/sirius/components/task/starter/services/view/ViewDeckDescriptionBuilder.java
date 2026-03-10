@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2023, 2024 Obeo.
+ * Copyright (c) 2023, 2026 Obeo.
  * This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v2.0
  * which accompanies this distribution, and is available at
@@ -73,7 +73,8 @@ public class ViewDeckDescriptionBuilder {
         view.getColorPalettes().add(this.createColorPalette());
 
         this.createDailyDeckDescription(view);
-        this.createOKRDeckDescription(view);
+        this.createProjectOKRDeckDescription(view);
+        this.createWorkpackageOKRDeckDescription(view);
         this.createKanbanDeckDescription(view);
     }
 
@@ -95,10 +96,21 @@ public class ViewDeckDescriptionBuilder {
         view.getDescriptions().add(deckDescription);
     }
 
-    private void createOKRDeckDescription(View view) {
+    private void createProjectOKRDeckDescription(View view) {
         DeckDescription deckDescription = this.deckBuilders.newDeckDescription()
-                .name("Deck OKR Representation")
-                .domainType("task::Project")
+                .name("Deck OKR on Project")
+                .domainType("peppermm::Project")
+                .titleExpression("New OKR Representation")
+                .laneDescriptions(this.createObjectiveLaneDescription())
+                .laneDropTool(this.createObjectiveLaneDropTool())
+                .build();
+
+        view.getDescriptions().add(deckDescription);
+    }
+    private void createWorkpackageOKRDeckDescription(View view) {
+        DeckDescription deckDescription = this.deckBuilders.newDeckDescription()
+                .name("Deck OKR on Workpackage")
+                .domainType("peppermm::Workpackage")
                 .titleExpression("New OKR Representation")
                 .laneDescriptions(this.createObjectiveLaneDescription())
                 .laneDropTool(this.createObjectiveLaneDropTool())
@@ -117,13 +129,13 @@ public class ViewDeckDescriptionBuilder {
                 .build();
 
         ConditionalDeckElementDescriptionStyle conditionStyleForTaskWithParentWithoutSameTag = this.deckBuilders.newConditionalDeckElementDescriptionStyle()
-                .condition(String.format("aql:if self.eContainer().oclIsKindOf(task::AbstractTask) then not self.eContainer().tags->exists(tag | tag.prefix == '%s') else false endif", tagPrefix))
+                .condition(String.format("aql:if self.eContainer().oclIsKindOf(peppermm::AbstractTask) then not self.eContainer().tags->exists(tag | tag.prefix == '%s') else false endif", tagPrefix))
                 .backgroundColor(view.getColorPalettes().get(0).getColors().get(1))
                 .build();
 
         return this.deckBuilders.newCardDescription()
                 .name("Card Description")
-                .semanticCandidatesExpression("aql:self.getTasksWithTag()")
+                .semanticCandidatesExpression("aql:self.getTasksWithTag(deckTarget)")
                 .titleExpression(AQL_SELF_NAME)
                 .labelExpression("aql:self.computeTaskDurationDays()")
                 .descriptionExpression(AQL_SELF_DESCRIPTION)
@@ -154,9 +166,9 @@ public class ViewDeckDescriptionBuilder {
         EditLaneTool editLaneTool = this.createEditTagLaneTool();
         return this.deckBuilders.newLaneDescription()
                 .name("Lane Description")
-                .semanticCandidatesExpression(String.format("aql:self.ownedTags->select(tag | tag.prefix == '%s')", prefix))
+                .semanticCandidatesExpression(String.format("aql:self.eContainer(peppermm::Project).ownedTagFolders.ownedTags->select(tag | tag.prefix == '%s')", prefix))
                 .labelExpression(String.format(
-                        "aql:self.getTasksWithTag()->size() + ' / ' + self.eContainer().oclAsType(task::Project).ownedTasks->select(task | task.tags->exists(tag | tag.prefix == '%s'))->size()",
+                        "aql:self.getTasksWithTag(deckTarget)->size() + ' / ' + deckTarget.ownedTasks->select(task | task.tags->exists(tag | tag.prefix == '%s'))->size()",
                         prefix))
                 .titleExpression("aql:self.suffix")
                 .createTool(createCardTool)
@@ -220,7 +232,7 @@ public class ViewDeckDescriptionBuilder {
         String representationTypeName = prefix.substring(0, 1).toUpperCase() + prefix.substring(1);
         return this.deckBuilders.newDeckDescription()
                 .name(String.format("Deck %s Representation", representationTypeName))
-                .domainType("task::Project")
+                .domainType("peppermm::Workpackage")
                 .titleExpression(String.format("New %s Representation", representationTypeName))
                 .laneDropTool(laneDropTool)
                 .build();
@@ -260,13 +272,13 @@ public class ViewDeckDescriptionBuilder {
                 .build();
 
         CreateInstance createInstance = this.viewBuilders.newCreateInstance()
-                .typeName("task::Task")
+                .typeName("peppermm::Task")
                 .referenceName("ownedTasks")
                 .children(newInstanceChangeContext)
                 .build();
 
         ChangeContext projectChangeContext = this.viewBuilders.newChangeContext()
-                .expression("aql:self.eContainer().oclAsType(task::Project)")
+                .expression("aql:deckTarget")
                 .children(createInstance)
                 .build();
 
@@ -281,6 +293,7 @@ public class ViewDeckDescriptionBuilder {
                 .body(let)
                 .build();
     }
+
 
     private CreateCardTool createObjectiveCardTool() {
 
@@ -300,7 +313,7 @@ public class ViewDeckDescriptionBuilder {
                 .build();
 
         CreateInstance createInstance = this.viewBuilders.newCreateInstance()
-                .typeName("task::KeyResult")
+                .typeName("peppermm::KeyResult")
                 .referenceName("ownedKeyResults")
                 .children(newInstanceChangeContext)
                 .build();
